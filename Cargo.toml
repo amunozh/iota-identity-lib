@@ -9,8 +9,10 @@ edition = "2018"
 name= "iota_identity_lib"
 path= "src/lib.rs"
 
+[workspace]
+members = ["example",]
+
 [dependencies]
 identity = { git = "https://github.com/iotaledger/identity.rs", branch = "main", features = ["account"]}
-tokio = { version = "1.4", features = ["full"]}
-pretty_env_logger = { version = "0.4" }
-rand = { version = "0.8" }
+tokio = { version = "1.4", features = ["full"] }
+anyhow = { version = "1.0", default-features = false }

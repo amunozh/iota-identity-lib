@@ -1,7 +1,8 @@
-use identity::iota::{IotaDocument, Client, Network, Result};
+use identity::iota::{IotaDocument, Client, Network, CredentialValidator, CredentialValidation};
 use identity::crypto::KeyPair;
 use identity::credential::{Credential, Subject, CredentialBuilder};
-use identity::core::{Value, FromJson, Url};
+use identity::core::{Value, FromJson, Url, ToJson};
+use anyhow::{Result, Error};
 
 pub struct IdentityManager{
     did_document: IotaDocument,
@@ -29,7 +30,12 @@ impl IdentityManager{
     }
 
     pub fn new_credential(&mut self, issuer_did: &str, credential_type: &str, serde_json: Value) -> Result<Credential>{
-        let subject = Subject::from_json_value(serde_json)?;
+        let mut map = match serde_json.as_object(){
+            None => return Err(Error::msg("Invalid json format")),
+            Some(map) => map.clone()
+        };
+        map.insert("id".to_string(), Value::String(self.did()));
+        let subject = Subject::from_json_value(Value::Object(map))?;
 
         // Build credential using subject above and issuer.
         let credential: Credential = CredentialBuilder::default()
@@ -49,5 +55,26 @@ impl IdentityManager{
 
     pub fn did(&self) -> String{
         self.did_document.id().as_str().to_string()
+    }
+}
+
+pub struct Validator{
+    client: Client,
+}
+
+impl Validator{
+    pub async fn new(mainnet: bool) -> Result<Validator>{
+        let network = if mainnet {Network::Mainnet} else {Network::Testnet};
+        let client = Client::builder().network(network).build().await?;
+        Ok(Validator{ client })
+    }
+
+    pub async fn validate_from_vc(&self, credential: &Credential, expected_did_issuer: &str) -> Result<bool>{
+        let validator = CredentialValidator::new(&self.client);
+        let json = credential.to_json()?;
+        let validation: CredentialValidation = validator.check(&json).await?;
+        let validate = validation.verified;
+
+        Ok(validate && validation.issuer.did.as_str() == expected_did_issuer)
     }
 }
