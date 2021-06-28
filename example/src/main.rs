@@ -24,10 +24,8 @@ async fn main() -> Result<()> {
 
     subject.store_credential("cred", &credential);
     let credential = subject.get_credential("cred").unwrap();
-
-    let validator = Validator::new(true).await?;
-    let validation = validator.validate_from_vc(credential, issuer_did.as_str()).await?;
-
+    let validation = Validator::validate_credential(credential, issuer_did).await?;
     println!("{}", validation);
+
     Ok(())
 }

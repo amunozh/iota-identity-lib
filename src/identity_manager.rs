@@ -81,23 +81,17 @@ impl IdentityManager{
     }
 }
 
-pub struct Validator{
-    client: Client,
-}
+pub struct Validator;
 
 impl Validator{
-    pub async fn new(mainnet: bool) -> Result<Validator>{
-        let network = if mainnet {Network::Mainnet} else {Network::Testnet};
-        let client = Client::builder().network(network).build().await?;
-        Ok(Validator{ client })
-    }
 
-    pub async fn validate_from_vc(&self, credential: &Credential, expected_did_issuer: &str) -> Result<bool>{
-        let validator = CredentialValidator::new(&self.client);
+    pub async fn validate_credential(credential: &Credential, expected_did_issuer: &IotaDID) -> Result<bool>{
+        let client = Client::builder().network(Network::from_did(expected_did_issuer)).build().await?;
+        let validator = CredentialValidator::new(&client);
         let json = credential.to_json()?;
         let validation: CredentialValidation = validator.check(&json).await?;
         let validate = validation.verified;
 
-        Ok(validate && validation.issuer.did.as_str() == expected_did_issuer)
+        Ok(validate && validation.issuer.did.as_str() == expected_did_issuer.as_str())
     }
 }
