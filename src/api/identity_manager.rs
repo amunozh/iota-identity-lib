@@ -4,28 +4,75 @@ use identity::core::{Value, FromJson, Url, ToJson};
 use anyhow::{Result, Error};
 use identity::account::{Account, AccountStorage, AutoSave, IdentityCreate};
 use std::collections::HashMap;
+use regex::Regex;
+use crate::api::account_state::AccountState;
+use std::path::Path;
+
+pub enum Storage{
+    Memory,
+    Stronghold(String, Option<String>),
+}
 
 pub struct IdentityManager{
     account: Account,
     documents: HashMap<String, IotaDocument>,
     credentials: HashMap<String, Credential>,
+    dir_psw: Option<(String, Option<String>)>
 }
 
 impl IdentityManager{
-    pub async fn new(storage: AccountStorage) -> Result<Self>{
+    pub async fn new(storage: Storage) -> Result<Self>{
+        let (storage, dir_pass) = match storage{
+            Storage::Stronghold(dir, password) => {
+                let regex = Regex::new(".*\\.[a-zA-Z0-9]+").unwrap();
+                if regex.is_match(&dir){
+                    return Err(Error::msg("The path must refer to a folder and not to a file"));
+                }
+                let path = format!("{}/stronghold.hodl", dir);
+                let stronghold = AccountStorage::Stronghold(path.into(), password.clone());
+                (stronghold, Some((format!("{}/idvc.hodl", dir), password)))
+            },
+            _ => (AccountStorage::Memory, None)
+        };
+
         let account = Account::builder()
             .storage(storage)
             .autosave(AutoSave::Every)
             .build().await?;
-        let documents = HashMap::default();
-        let credentials = HashMap::default();
-        Ok(
-            IdentityManager{account, documents, credentials}
-        )
+        let (documents, credentials) = IdentityManager::try_restore(&account, &dir_pass).await?;
+        Ok(IdentityManager{account, documents, credentials, dir_psw: dir_pass })
     }
 
     pub async fn default() -> Result<Self>{
-        IdentityManager::new(AccountStorage::Memory).await
+        IdentityManager::new(Storage::Memory).await
+    }
+
+    async fn try_restore(account: &Account, dir_pass: &Option<(String, Option<String>)>) -> Result<(HashMap<String, IotaDocument>, HashMap<String, Credential>)>{
+        let (dir, psw) = match dir_pass {
+            None => return Ok((HashMap::default(), HashMap::default())),
+            Some(res) => res
+        };
+
+        if !Path::new(dir).exists(){
+            return Ok((HashMap::default(), HashMap::default()))
+        }
+
+        let psw = match psw {
+            None => "psw",
+            Some(psw) => psw,
+        };
+
+        let state = AccountState::from_file(dir, psw)?;
+        let mut documents = HashMap::default();
+        for (name, did_str) in state.dids() {
+            let did = IotaDID::parse(did_str)?;
+            println!("{} -> {}", name, did);
+            let doc = account.resolve_identity(&did).await?;
+            documents.insert(name.clone(), doc);
+        }
+
+        let vcs = state.vcs().iter().map(|x| (x.0.clone(), serde_json::from_str(&x.1).unwrap())).collect();
+        Ok((documents, vcs))
     }
 
     pub async fn create_identity(&mut self, identity_name: &str) -> Result<IotaDocument>{
@@ -81,8 +128,30 @@ impl IdentityManager{
     }
 }
 
-pub struct Validator;
+impl Drop for IdentityManager{
+    fn drop(&mut self) {
+        let (dir, psw) = match &self.dir_psw {
+            None => return,
+            Some(res) => res
+        };
 
+        let psw = match psw {
+            None => "psw",
+            Some(psw) => psw,
+        };
+
+        let dids = self.documents.iter().map(|x| (x.0.clone(), x.1.id().as_str().to_string())).collect();
+        let vcs = self.credentials.iter().map(|x| (x.0.clone(), x.1.to_json().unwrap())).collect();
+        let state = AccountState::new(dids, vcs);
+        match state.write_to_file(dir, psw){
+            Ok(_) => {}
+            Err(e) => eprintln!("{}",e)
+        };
+    }
+}
+
+
+pub struct Validator;
 impl Validator{
 
     pub async fn validate_credential(credential: &Credential, expected_did_issuer: &IotaDID) -> Result<bool>{

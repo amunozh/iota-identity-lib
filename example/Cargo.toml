@@ -9,3 +9,4 @@ edition = "2018"
 [dependencies]
 iota_identity_lib = { path = ".." }
 tokio = { version = "1.4", features = ["full"] }
+identity = { git = "https://github.com/iotaledger/identity.rs", branch = "main", features = ["account"]}
