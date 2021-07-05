@@ -1,58 +1,77 @@
 use iota_identity_lib::Result;
 use iota_identity_lib::api::{Storage, IdentityManager, Validator};
 use iota_identity_lib::iota::{json, IotaDID};
+use identity::credential::Credential;
 
-async fn try_create(storage: Storage) -> Result<()>{
-    let mut issuer = IdentityManager::default().await?;
+async fn create_and_test_issuer(storage: Storage) -> Result<()>{
+    let mut issuer = IdentityManager::new(storage).await?;
     issuer.create_identity("Santer Reply").await?;
     issuer.create_identity("Santer Reply2").await?;
+
     let list: Vec<(String, String)> = issuer.identities().iter_mut().map(|x| (x.0.to_string(), x.1.id().as_str().to_string())).collect();
     println!("IDENTITY LIST:\n{:?}", list);
+
     let issuer_did = issuer.get_identity("santer reply").unwrap().id();
     println!("ISSUER: {}", issuer_did.as_str());
+    Ok(())
+}
 
+async fn create_and_test_subject(storage: Storage) -> Result<()>{
     let mut subject = IdentityManager::new(storage).await?;
     let subject_doc = subject.create_identity("Personale").await?;
     let subject_did = subject_doc.id();
     println!("SUBJECT: {}", subject_did.as_str());
+    Ok(())
+}
 
+async fn issue_and_sign_vs(issuer: &IdentityManager, subject_did: &IotaDID) -> Result<Credential>{
     let credential = issuer.issue_credential_as("Santer Reply", subject_did, "ChannelWriterAuthorization", json!({
         "channel_authorization":{
             "actor_id": "m123456",
             "channel_id": "123456789:1234"
         }
     })).await?;
+    Ok(credential)
+}
 
-    subject.store_credential("cred", &credential);
-    let credential = subject.get_credential("cred").unwrap();
-    let validation = Validator::validate_credential(credential, issuer_did).await?;
-    println!("{}", validation);
-
+async fn validate_vc(credential: &Credential, expected_issuer_did: &IotaDID) -> Result<()>{
+    let validation = Validator::validate_credential(credential, expected_issuer_did).await?;
+    println!("\nVALIDATION: {}\n", validation);
     Ok(())
 }
 
-async fn try_restore(storage: Storage, issuer_did: &str) -> Result<()>{
-    let subject = IdentityManager::new(storage).await?;
-    let list: Vec<(String, String)> = subject.identities().iter_mut().map(|x| (x.0.to_string(), x.1.id().as_str().to_string())).collect();
-    println!("IDENTITY LIST:\n{:?}", list);
-
-    let credential = subject.get_credential("cred").unwrap();
-    let validation = Validator::validate_credential(credential, &IotaDID::parse(issuer_did)?).await?;
-    println!("{}", validation);
-
+async fn try_restore(storage: Storage, storage2: Storage) -> Result<()>{
+    let issuer = IdentityManager::new(storage).await?;
+    let did = issuer.get_identity("santer reply").unwrap().id();
+    let subject = IdentityManager::new(storage2).await?;
+    let credential = subject.get_credential("chauth").unwrap();
+    validate_vc(credential, did).await?;
     Ok(())
 }
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let dir = "./state";
-    // let dir2 = "./states/subject";
+    let dir = "./states/issuer";
+    let dir2 = "./states/subject";
     let psw = "psw";
     let storage = Storage::Stronghold(dir.to_string(), Some(psw.to_string()));
+    let storage2 = Storage::Stronghold(dir2.to_string(), Some(psw.to_string()));
+
+    // create_and_test_issuer(storage).await?;
+    // create_and_test_subject(storage2).await?;
+    // let storage = Storage::Stronghold(dir.to_string(), Some(psw.to_string()));
     // let storage2 = Storage::Stronghold(dir2.to_string(), Some(psw.to_string()));
 
-    // try_create(storage).await?;
-    try_restore(storage, "did:iota:HF7SxWGVFE5Umw3t1p1ErJ2DCgrwBoCe5x446tsbaZJL").await?;
+    let issuer = IdentityManager::new(storage).await?;
+    let issuer_did = issuer.get_identity("santer reply").unwrap().id();
+    let mut subject = IdentityManager::new(storage2).await?;
+
+    // let subject_did = subject.get_identity("personale").unwrap().id();
+    // let cred = issue_and_sign_vs(&issuer, subject_did).await?;
+    // subject.store_credential("chauth", &cred);
+
+    let cred = subject.get_credential("chauth").unwrap();
+    validate_vc(cred, issuer_did).await;
 
     Ok(())
 }
