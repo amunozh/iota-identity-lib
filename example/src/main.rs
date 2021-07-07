@@ -40,15 +40,6 @@ async fn validate_vc(credential: &Credential, expected_issuer_did: &IotaDID) -> 
     Ok(())
 }
 
-async fn try_restore(storage: Storage, storage2: Storage) -> Result<()>{
-    let issuer = IdentityManager::new(storage).await?;
-    let did = issuer.get_identity("santer reply").unwrap().id();
-    let subject = IdentityManager::new(storage2).await?;
-    let credential = subject.get_credential("chauth").unwrap();
-    validate_vc(credential, did).await?;
-    Ok(())
-}
-
 #[tokio::main]
 async fn main() -> Result<()> {
     let dir = "./states/issuer";
@@ -57,21 +48,21 @@ async fn main() -> Result<()> {
     let storage = Storage::Stronghold(dir.to_string(), Some(psw.to_string()));
     let storage2 = Storage::Stronghold(dir2.to_string(), Some(psw.to_string()));
 
-    // create_and_test_issuer(storage).await?;
-    // create_and_test_subject(storage2).await?;
-    // let storage = Storage::Stronghold(dir.to_string(), Some(psw.to_string()));
-    // let storage2 = Storage::Stronghold(dir2.to_string(), Some(psw.to_string()));
+    create_and_test_issuer(storage).await?;
+    create_and_test_subject(storage2).await?;
+    let storage = Storage::Stronghold(dir.to_string(), Some(psw.to_string()));
+    let storage2 = Storage::Stronghold(dir2.to_string(), Some(psw.to_string()));
 
     let issuer = IdentityManager::new(storage).await?;
     let issuer_did = issuer.get_identity("santer reply").unwrap().id();
     let mut subject = IdentityManager::new(storage2).await?;
+    let subject_did = subject.get_identity("personale").unwrap().id();
 
-    // let subject_did = subject.get_identity("personale").unwrap().id();
-    // let cred = issue_and_sign_vs(&issuer, subject_did).await?;
-    // subject.store_credential("chauth", &cred);
+    let cred = issue_and_sign_vs(&issuer, subject_did).await?;
+    subject.store_credential("chauth", &cred);
 
     let cred = subject.get_credential("chauth").unwrap();
-    validate_vc(cred, issuer_did).await;
+    validate_vc(cred, issuer_did).await?;
 
     Ok(())
 }
