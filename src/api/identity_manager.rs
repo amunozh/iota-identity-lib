@@ -10,7 +10,7 @@ use std::path::Path;
 use chrono::Local;
 use crate::api::identity_manager_builder::IdentityManagerBuilder;
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub enum Storage{
     Memory,
     Stronghold(String, Option<String>),

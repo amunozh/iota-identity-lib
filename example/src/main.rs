@@ -56,10 +56,8 @@ async fn main() -> Result<()> {
     let storage = Storage::Stronghold(dir.to_string(), Some(psw.to_string()));
     let storage2 = Storage::Stronghold(dir2.to_string(), Some(psw.to_string()));
 
-    create_and_test_issuer(storage, mainnet).await?;
-    create_and_test_subject(storage2, mainnet).await?;
-    let storage = Storage::Stronghold(dir.to_string(), Some(psw.to_string()));
-    let storage2 = Storage::Stronghold(dir2.to_string(), Some(psw.to_string()));
+    create_and_test_issuer(storage.clone(), mainnet).await?;
+    create_and_test_subject(storage2.clone(), mainnet).await?;
 
     let issuer = IdentityManager::new(storage, mainnet).await?;
     let issuer_did = issuer.get_identity("santer reply").unwrap().id();
