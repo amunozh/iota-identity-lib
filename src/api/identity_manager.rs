@@ -1,12 +1,13 @@
 use identity::iota::{IotaDocument, Client, Network, CredentialValidator, CredentialValidation, IotaDID};
 use identity::credential::{Credential, Subject, CredentialBuilder};
-use identity::core::{Value, FromJson, Url, ToJson};
+use identity::core::{Value, FromJson, Url, ToJson, Timestamp};
 use anyhow::{Result, Error};
 use identity::account::{Account, AccountStorage, AutoSave, IdentityCreate};
 use std::collections::HashMap;
 use regex::Regex;
 use crate::api::account_state::AccountState;
 use std::path::Path;
+use chrono::Local;
 
 pub enum Storage{
     Memory,
@@ -95,11 +96,13 @@ impl IdentityManager{
         map.insert("id".to_string(), Value::String(subject_did.as_str().to_string()));
         let subject = Subject::from_json_value(Value::Object(map))?;
 
+        let expiration = Timestamp::from_unix(Local::now().timestamp() + (3600*24*7));
         // Build credential using subject above and issuer.
         let mut credential: Credential = CredentialBuilder::default()
             .issuer(Url::parse(issuer_did.as_str())?)
             .type_(credential_type)
             .subject(subject)
+            .expiration_date(expiration)
             .build()?;
 
         self.sign_credential(issuer_did, &mut credential).await?;
