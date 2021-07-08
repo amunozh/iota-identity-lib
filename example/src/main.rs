@@ -1,10 +1,13 @@
 use iota_identity_lib::Result;
 use iota_identity_lib::api::{Storage, IdentityManager, Validator};
-use iota_identity_lib::iota::{json, IotaDID};
-use identity::credential::Credential;
+use iota_identity_lib::iota::{json, IotaDID, Credential};
 
-async fn create_and_test_issuer(storage: Storage) -> Result<()>{
-    let mut issuer = IdentityManager::new(storage).await?;
+async fn create_and_test_issuer(storage: Storage, mainnet: bool) -> Result<()>{
+    let mut issuer = IdentityManager::builder()
+        .storage(storage)
+        .main_net(mainnet)
+        .build()
+        .await?;
     issuer.create_identity("Santer Reply").await?;
     issuer.create_identity("Santer Reply2").await?;
 
@@ -16,8 +19,12 @@ async fn create_and_test_issuer(storage: Storage) -> Result<()>{
     Ok(())
 }
 
-async fn create_and_test_subject(storage: Storage) -> Result<()>{
-    let mut subject = IdentityManager::new(storage).await?;
+async fn create_and_test_subject(storage: Storage, mainnet: bool) -> Result<()>{
+    let mut subject = IdentityManager::builder()
+        .storage(storage)
+        .main_net(mainnet)
+        .build()
+        .await?;
     let subject_doc = subject.create_identity("Personale").await?;
     let subject_did = subject_doc.id();
     println!("SUBJECT: {}", subject_did.as_str());
@@ -42,20 +49,21 @@ async fn validate_vc(credential: &Credential, expected_issuer_did: &IotaDID) -> 
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    let mainnet = false;
     let dir = "./states/issuer";
     let dir2 = "./states/subject";
     let psw = "psw";
     let storage = Storage::Stronghold(dir.to_string(), Some(psw.to_string()));
     let storage2 = Storage::Stronghold(dir2.to_string(), Some(psw.to_string()));
 
-    create_and_test_issuer(storage).await?;
-    create_and_test_subject(storage2).await?;
+    create_and_test_issuer(storage, mainnet).await?;
+    create_and_test_subject(storage2, mainnet).await?;
     let storage = Storage::Stronghold(dir.to_string(), Some(psw.to_string()));
     let storage2 = Storage::Stronghold(dir2.to_string(), Some(psw.to_string()));
 
-    let issuer = IdentityManager::new(storage).await?;
+    let issuer = IdentityManager::new(storage, mainnet).await?;
     let issuer_did = issuer.get_identity("santer reply").unwrap().id();
-    let mut subject = IdentityManager::new(storage2).await?;
+    let mut subject = IdentityManager::new(storage2, mainnet).await?;
     let subject_did = subject.get_identity("personale").unwrap().id();
 
     let cred = issue_and_sign_vs(&issuer, subject_did).await?;

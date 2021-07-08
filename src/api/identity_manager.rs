@@ -8,6 +8,7 @@ use regex::Regex;
 use crate::api::account_state::AccountState;
 use std::path::Path;
 use chrono::Local;
+use crate::api::identity_manager_builder::IdentityManagerBuilder;
 
 pub enum Storage{
     Memory,
@@ -18,11 +19,12 @@ pub struct IdentityManager{
     account: Account,
     documents: HashMap<String, IotaDocument>,
     credentials: HashMap<String, Credential>,
-    dir_psw: Option<(String, Option<String>)>
+    dir_psw: Option<(String, Option<String>)>,
+    network: String,
 }
 
 impl IdentityManager{
-    pub async fn new(storage: Storage) -> Result<Self>{
+     pub async fn new(storage: Storage, mainnet: bool) -> Result<Self>{
         let (storage, dir_pass) = match storage{
             Storage::Stronghold(dir, password) => {
                 let regex = Regex::new(".*\\.[a-zA-Z0-9]+").unwrap();
@@ -41,11 +43,16 @@ impl IdentityManager{
             .autosave(AutoSave::Every)
             .build().await?;
         let (documents, credentials) = IdentityManager::try_restore(&account, &dir_pass).await?;
-        Ok(IdentityManager{account, documents, credentials, dir_psw: dir_pass })
+        let network = if mainnet {"main".to_owned()} else {"test".to_owned()};
+        Ok(IdentityManager{account, documents, credentials, dir_psw: dir_pass, network})
     }
 
     pub async fn default() -> Result<Self>{
-        IdentityManager::new(Storage::Memory).await
+        IdentityManager::new(Storage::Memory, false).await
+    }
+
+    pub fn builder() -> IdentityManagerBuilder{
+        IdentityManagerBuilder::new()
     }
 
     async fn try_restore(account: &Account, dir_pass: &Option<(String, Option<String>)>) -> Result<(HashMap<String, IotaDocument>, HashMap<String, Credential>)>{
@@ -77,7 +84,7 @@ impl IdentityManager{
     }
 
     pub async fn create_identity(&mut self, identity_name: &str) -> Result<IotaDocument>{
-        let snap = self.account.create_identity(IdentityCreate::default()).await?;
+        let snap = self.account.create_identity(IdentityCreate::new().network(&self.network)).await?;
         let did = snap.identity().try_did()?;
         let document = self.account.resolve_identity(did).await?;
         self.documents.insert(identity_name.to_lowercase(), document.clone());
