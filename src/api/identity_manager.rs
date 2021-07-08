@@ -89,6 +89,7 @@ impl IdentityManager{
         let did = snap.identity().try_did()?;
         let document = self.account.resolve_identity(did).await?;
         self.documents.insert(identity_name.to_lowercase(), document.clone());
+        self.trigger_save_state();
         Ok(document)
     }
 
@@ -124,6 +125,7 @@ impl IdentityManager{
 
     pub fn store_credential(&mut self, id: &str, credential: &Credential){
         self.credentials.insert(id.to_string().to_lowercase(), credential.clone());
+        self.trigger_save_state();
     }
 
     pub fn identities(&self) -> Vec<(&String, &IotaDocument)>{
@@ -137,10 +139,8 @@ impl IdentityManager{
     pub fn get_credential(&self, id: &str) -> Option<&Credential>{
         self.credentials.get(&id.to_lowercase())
     }
-}
 
-impl Drop for IdentityManager{
-    fn drop(&mut self) {
+    fn trigger_save_state(&mut self){
         let (dir, psw) = match &self.dir_psw {
             None => return,
             Some(res) => res
