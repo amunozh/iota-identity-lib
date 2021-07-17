@@ -13,7 +13,7 @@ path= "src/lib.rs"
 members = ["example",]
 
 [dependencies]
-identity = { git = "https://github.com/iotaledger/identity.rs", branch = "main", features = ["account"]}
+identity = { git = "https://github.com/iotaledger/identity.rs", branch = "dev", features = ["account"]}
 tokio = { version = "1.4", features = ["full"] }
 anyhow = { version = "1.0", default-features = false }
 regex = "^1"
