@@ -75,7 +75,7 @@ impl IdentityManager{
         let mut documents = HashMap::default();
         for (name, did_str) in state.dids() {
             let did = IotaDID::parse(did_str)?;
-            println!("{} -> {}", name, did);
+            //println!("{} -> {}", name, did);
             let doc = account.resolve_identity(&did).await?;
             documents.insert(name.clone(), doc);
         }
@@ -85,10 +85,14 @@ impl IdentityManager{
     }
 
     pub async fn create_identity(&mut self, identity_name: &str) -> Result<IotaDocument>{
+        let identity_name = identity_name.to_lowercase();
+        if self.documents.contains_key(&identity_name){
+            return Err(anyhow::Error::msg(format!("Identity with name {} already exist", identity_name)));
+        }
         let snap = self.account.create_identity(IdentityCreate::new().network(&self.network)).await?;
         let did = snap.identity().try_did()?;
         let document = self.account.resolve_identity(did).await?;
-        self.documents.insert(identity_name.to_lowercase(), document.clone());
+        self.documents.insert(identity_name, document.clone());
         self.trigger_save_state();
         Ok(document)
     }
