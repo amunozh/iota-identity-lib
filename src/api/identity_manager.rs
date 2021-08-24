@@ -170,7 +170,7 @@ pub struct Validator;
 impl Validator{
 
     pub async fn validate_credential(credential: &Credential, expected_did_issuer: &IotaDID) -> Result<bool>{
-        let client = Client::builder().network(Network::from_did(expected_did_issuer)).build().await?;
+        let client = Client::builder().network(Network::try_from_did(expected_did_issuer)?).build().await?;
         let validator = CredentialValidator::new(&client);
         let json = credential.to_json()?;
         let validation: CredentialValidation = validator.check(&json).await?;
