@@ -1,4 +1,4 @@
-use identity::iota::{IotaDocument, Client, Network, CredentialValidator, CredentialValidation, IotaDID};
+use identity::iota::{IotaDocument, Client, Network, CredentialValidator, CredentialValidation, IotaDID, TangleResolve};
 use identity::credential::{Credential, Subject, CredentialBuilder};
 use identity::core::{Value, FromJson, Url, ToJson, Timestamp};
 use anyhow::{Result, Error};
@@ -177,5 +177,18 @@ impl Validator{
         let validate = validation.verified;
 
         Ok(validate && validation.issuer.did.as_str() == expected_did_issuer.as_str())
+    }
+
+    pub async fn is_document_valid(did: &str, mainnet: bool) -> Result<bool>{
+        let network = if mainnet {Network::Mainnet} else {Network::Testnet};
+        let client = Client::builder().network(network).build().await?;
+        Validator::validate_document(did, client).await
+            .map_or(Ok(false), |_| Ok(true))
+    }
+
+    async fn validate_document(did: &str, client: Client) -> Result<()> {
+        let did = IotaDID::parse(did)?;
+        let document: IotaDocument = client.resolve(&did).await?;
+        Ok(document.verify()?)
     }
 }

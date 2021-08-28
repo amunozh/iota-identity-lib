@@ -70,5 +70,8 @@ async fn main() -> Result<()> {
     let cred = subject.get_credential("chauth").unwrap();
     validate_vc(cred, issuer_did).await?;
 
+    assert_eq!(true, Validator::is_document_valid(&issuer_did.to_string(), mainnet).await?);
+    assert_eq!(false, Validator::is_document_valid("did:iota:test:BG6DuW2ESTyvLR2CJA4GJAT53NfMJohZYjmfWRiGySeg", false).await?);
+
     Ok(())
 }
