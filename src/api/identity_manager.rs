@@ -130,9 +130,17 @@ impl IdentityManager{
     }
 
     pub fn store_credential(&mut self, identity_name: &str, cred_name: &str, credential: &Credential) -> Result<()>{
-        let doc = self.documents.get(&identity_name.to_lowercase())
-            .map_or(Err(Error::msg(format!("Identity with name {} not found", identity_name))), |doc| Ok(doc))?;
-        self.credentials.insert((doc.id().to_string(), cred_name.to_string().to_lowercase()), credential.clone());
+        let expected = self.documents.get(&identity_name.to_lowercase())
+            .map_or(Err(Error::msg(format!("Identity with name {} not found", identity_name))), |doc| Ok(doc))?
+            .id().to_string();
+        let found = credential.credential_subject.get(0)
+            .map_or(Err(Error::msg("Bad credential format")), |sub| Ok(sub))?
+            .id.clone()
+            .map_or(Err(Error::msg("Bad credential format")), |url| Ok(url.to_string().replace("\"", "")))?;
+        if expected != found{
+            return Err(Error::msg(format!("The subject did doesn't correspond to the one of the identity with name {}", identity_name)))
+        }
+        self.credentials.insert((expected, cred_name.to_string().to_lowercase()), credential.clone());
         self.trigger_save_state();
         Ok(())
     }
