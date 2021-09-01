@@ -65,9 +65,9 @@ async fn main() -> Result<()> {
     let subject_did = subject.get_identity("personale").unwrap().id();
 
     let cred = issue_and_sign_vs(&issuer, subject_did).await?;
-    subject.store_credential("chauth", &cred);
+    subject.store_credential("personale", "chauth", &cred)?;
 
-    let cred = subject.get_credential("chauth").unwrap();
+    let cred = subject.get_credential("personale", "chauth").unwrap();
     validate_vc(cred, issuer_did).await?;
 
     assert_eq!(true, Validator::is_document_valid(&issuer_did.to_string(), mainnet).await?);

@@ -7,11 +7,11 @@ use std::io::{Write, Read};
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct AccountState{
     dids: Vec<(String, String)>,
-    vcs: Vec<(String, String)>
+    vcs: Vec<(String, String, String)>
 }
 
 impl AccountState{
-    pub fn new(dids: Vec<(String, String)>, vcs: Vec<(String, String)>) -> Self{
+    pub fn new(dids: Vec<(String, String)>, vcs: Vec<(String, String, String)>) -> Self{
         AccountState{ dids, vcs }
     }
 
@@ -45,7 +45,7 @@ impl AccountState{
     pub fn dids(&self) -> &Vec<(String, String)> {
         &self.dids
     }
-    pub fn vcs(&self) -> &Vec<(String, String)> {
+    pub fn vcs(&self) -> &Vec<(String, String, String)> {
         &self.vcs
     }
 }

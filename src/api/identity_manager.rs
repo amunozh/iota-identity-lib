@@ -19,7 +19,7 @@ pub enum Storage{
 pub struct IdentityManager{
     account: Account,
     documents: HashMap<String, IotaDocument>,
-    credentials: HashMap<String, Credential>,
+    credentials: HashMap<(String, String), Credential>,
     dir_psw: Option<(String, Option<String>)>,
     network: String,
 }
@@ -56,7 +56,7 @@ impl IdentityManager{
         IdentityManagerBuilder::new()
     }
 
-    async fn try_restore(account: &Account, dir_pass: &Option<(String, Option<String>)>) -> Result<(HashMap<String, IotaDocument>, HashMap<String, Credential>)>{
+    async fn try_restore(account: &Account, dir_pass: &Option<(String, Option<String>)>) -> Result<(HashMap<String, IotaDocument>, HashMap<(String, String), Credential>)>{
         let (dir, psw) = match dir_pass {
             None => return Ok((HashMap::default(), HashMap::default())),
             Some(res) => res
@@ -80,7 +80,9 @@ impl IdentityManager{
             documents.insert(name.clone(), doc);
         }
 
-        let vcs = state.vcs().iter().map(|x| (x.0.clone(), serde_json::from_str(&x.1).unwrap())).collect();
+        let vcs = state.vcs().iter()
+            .map(|x| ((x.0.clone(), x.1.clone()), serde_json::from_str(&x.2).unwrap()))
+            .collect();
         Ok((documents, vcs))
     }
 
@@ -127,9 +129,12 @@ impl IdentityManager{
         Ok(())
     }
 
-    pub fn store_credential(&mut self, id: &str, credential: &Credential){
-        self.credentials.insert(id.to_string().to_lowercase(), credential.clone());
+    pub fn store_credential(&mut self, identity_name: &str, cred_name: &str, credential: &Credential) -> Result<()>{
+        let doc = self.documents.get(&identity_name.to_lowercase())
+            .map_or(Err(Error::msg(format!("Identity with name {} not found", identity_name))), |doc| Ok(doc))?;
+        self.credentials.insert((doc.id().to_string(), cred_name.to_string().to_lowercase()), credential.clone());
         self.trigger_save_state();
+        Ok(())
     }
 
     pub fn identities(&self) -> Vec<(&String, &IotaDocument)>{
@@ -140,8 +145,9 @@ impl IdentityManager{
         self.documents.get(&identity_name.to_lowercase())
     }
 
-    pub fn get_credential(&self, id: &str) -> Option<&Credential>{
-        self.credentials.get(&id.to_lowercase())
+    pub fn get_credential(&self, identity_name: &str, cred_name: &str) -> Option<&Credential>{
+        let did = self.get_identity(identity_name)?.id().to_string();
+        self.credentials.get(&(did, cred_name.to_lowercase()))
     }
 
     fn trigger_save_state(&mut self){
@@ -156,7 +162,7 @@ impl IdentityManager{
         };
 
         let dids = self.documents.iter().map(|x| (x.0.clone(), x.1.id().as_str().to_string())).collect();
-        let vcs = self.credentials.iter().map(|x| (x.0.clone(), x.1.to_json().unwrap())).collect();
+        let vcs = self.credentials.iter().map(|x| (x.0.0.clone(), x.0.1.clone(), x.1.to_json().unwrap())).collect();
         let state = AccountState::new(dids, vcs);
         match state.write_to_file(dir, psw){
             Ok(_) => {}
