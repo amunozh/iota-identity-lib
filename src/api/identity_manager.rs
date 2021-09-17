@@ -10,6 +10,7 @@ use std::path::Path;
 use chrono::Local;
 use crate::api::identity_manager_builder::IdentityManagerBuilder;
 
+
 #[derive(Debug, Clone)]
 pub enum Storage{
     Memory,
@@ -39,12 +40,19 @@ impl IdentityManager{
             _ => (AccountStorage::Memory, None)
         };
 
+        let network = if mainnet {"main".to_owned()} else {"dev".to_owned()};
         let account = Account::builder()
+            .client(Network::try_from_name(network.clone())?, |builder| {
+                let mut node_url = "https://api.lb-0.h.chrysalis-devnet.iota.cafe/";
+                if mainnet{
+                    node_url = "https://chrysalis-nodes.iota.cafe/"
+                }
+                builder.node(node_url).unwrap()
+            })
             .storage(storage)
             .autosave(AutoSave::Every)
             .build().await?;
         let (documents, credentials) = IdentityManager::try_restore(&account, &dir_pass).await?;
-        let network = if mainnet {"main".to_owned()} else {"test".to_owned()};
         Ok(IdentityManager{account, documents, credentials, dir_psw: dir_pass, network})
     }
 
@@ -183,26 +191,42 @@ impl IdentityManager{
 pub struct Validator;
 impl Validator{
 
-    pub async fn validate_credential(credential: &Credential, expected_did_issuer: &IotaDID) -> Result<bool>{
-        let client = Client::builder().network(Network::try_from_did(expected_did_issuer)?).build().await?;
+    pub async fn validate_credential(credential: &Credential, expected_did_issuer: &str, mainnet: bool) -> Result<bool>{
+        let client = Validator::build_client(mainnet).await?;
         let validator = CredentialValidator::new(&client);
         let json = credential.to_json()?;
-        let validation: CredentialValidation = validator.check(&json).await?;
+        let validation: CredentialValidation = match validator.check(&json).await{
+            Ok(val) => val,
+            Err(_) => return Ok(false)
+        };
         let validate = validation.verified;
 
-        Ok(validate && validation.issuer.did.as_str() == expected_did_issuer.as_str())
+        Ok(validate && validation.issuer.did.as_str() == expected_did_issuer)
     }
 
     pub async fn is_document_valid(did: &str, mainnet: bool) -> Result<bool>{
-        let network = if mainnet {Network::Mainnet} else {Network::Testnet};
-        let client = Client::builder().network(network).build().await?;
-        Validator::validate_document(did, client).await
+        let did  = IotaDID::parse(did)?;
+        let client = Validator::build_client(mainnet).await?;
+        Validator::validate_document(&did, client).await
             .map_or(Ok(false), |_| Ok(true))
     }
 
-    async fn validate_document(did: &str, client: Client) -> Result<()> {
-        let did = IotaDID::parse(did)?;
-        let document: IotaDocument = client.resolve(&did).await?;
+    async fn build_client(mainnet: bool) -> Result<Client>{
+        let mut builder = Client::builder();
+        if mainnet{
+            builder = builder.nodes(&["https://chrysalis-nodes.iota.cafe/"])?
+                .network(Network::try_from_name("main")?)
+        }else{
+            builder = builder.nodes(&["https://api.lb-0.h.chrysalis-devnet.iota.cafe/", "https://api.lb-0.testnet.chrysalis2.com/"])?
+                .network(Network::try_from_name("dev")?)
+        }
+        Ok(
+            builder.build().await?
+        )
+    }
+
+    async fn validate_document(did: &IotaDID, client: Client) -> Result<()> {
+        let document: IotaDocument = client.resolve(did).await?;
         Ok(document.verify()?)
     }
 }

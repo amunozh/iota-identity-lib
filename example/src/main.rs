@@ -41,8 +41,8 @@ async fn issue_and_sign_vs(issuer: &IdentityManager, subject_did: &IotaDID) -> R
     Ok(credential)
 }
 
-async fn validate_vc(credential: &Credential, expected_issuer_did: &IotaDID) -> Result<()>{
-    let validation = Validator::validate_credential(credential, expected_issuer_did).await?;
+async fn validate_vc(credential: &Credential, expected_issuer_did: &str, mainnet: bool) -> Result<()>{
+    let validation = Validator::validate_credential(credential, expected_issuer_did, mainnet).await?;
     println!("\nVALIDATION: {}\n", validation);
     Ok(())
 }
@@ -56,8 +56,8 @@ async fn main() -> Result<()> {
     let storage = Storage::Stronghold(dir.to_string(), Some(psw.to_string()));
     let storage2 = Storage::Stronghold(dir2.to_string(), Some(psw.to_string()));
 
-    create_and_test_issuer(storage.clone(), mainnet).await?;
-    create_and_test_subject(storage2.clone(), mainnet).await?;
+    // create_and_test_issuer(storage.clone(), mainnet).await?;
+    // create_and_test_subject(storage2.clone(), mainnet).await?;
 
     let issuer = IdentityManager::new(storage, mainnet).await?;
     let issuer_did = issuer.get_identity("santer reply").unwrap().id();
@@ -68,10 +68,10 @@ async fn main() -> Result<()> {
     subject.store_credential("personale", "chauth", &cred)?;
 
     let cred = subject.get_credential("personale", "chauth").unwrap();
-    validate_vc(cred, issuer_did).await?;
+    validate_vc(cred, issuer_did.as_str(), mainnet).await?;
 
     assert_eq!(true, Validator::is_document_valid(&issuer_did.to_string(), mainnet).await?);
-    assert_eq!(false, Validator::is_document_valid("did:iota:test:BG6DuW2ESTyvLR2CJA4GJAT53NfMJohZYjmfWRiGySeg", false).await?);
+    assert_eq!(false, Validator::is_document_valid("did:iota:test:BG6DuW2ESTyvLR2CJA4GJAT53NfMJohZYjmfWRiGySeg", mainnet).await?);
 
     Ok(())
 }
